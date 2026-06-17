@@ -227,7 +227,7 @@ def parse_vocab_mappings(args: argparse.Namespace):
     return None, None, verifier_config.vocab_size
 
 
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace):  # noqa: C901, PLR0912
     # Set random seed for reproducibility
     set_seed(args.seed, args.deterministic_cuda)
 
@@ -326,7 +326,7 @@ def main(args: argparse.Namespace):
         # Switch attention to Ulysses SP variant for supported models
         if args.speculator_type in ("eagle3",):
             tl_cfg = draft_model.config.transformer_layer_config
-            tl_cfg._attn_implementation = "ulysses_flex_attention"  # noqa: SLF001
+            tl_cfg._attn_implementation = "ulysses_flex_attention"
 
     train_loader, val_loader = create_train_val_loaders(
         data_path=args.data_path,

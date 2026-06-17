@@ -129,7 +129,7 @@ class Eagle3DraftModel(DraftVocabMixin, SpeculatorModel):
             )
 
     @conditional_torch_compile
-    def forward(  # noqa: C901
+    def forward(  # noqa: C901, PLR0912
         self,
         hidden_states: torch.Tensor,  # shape: [1, total_seq_len, 3 * hidden_size]
         input_ids: torch.Tensor,  # shape: [1, total_seq_len]
@@ -159,9 +159,7 @@ class Eagle3DraftModel(DraftVocabMixin, SpeculatorModel):
 
         past_key_values = DynamicCache(config=self.config.transformer_layer_config)
 
-        combined_mask_mod = create_combined_mask_mod(
-            lengths.to(device), global_seq_len
-        )
+        combined_mask_mod = create_combined_mask_mod(lengths.to(device), global_seq_len)
         # Note: Attention mask is stored as a BlockMask object
         attention_mask = create_block_mask(
             combined_mask_mod,
