@@ -46,8 +46,8 @@ def _moe_config(num_experts: int, depth_to_expert=None) -> Eagle3MoESpeculatorCo
 
 
 def test_registered():
-    assert SpeculatorModel.get_class("eagle3_moe") is Eagle3MoEDraftModel
-    assert SpeculatorModelConfig.get_class("eagle3_moe") is Eagle3MoESpeculatorConfig
+    assert SpeculatorModel.registry["eagle3_moe"] is Eagle3MoEDraftModel
+    assert SpeculatorModelConfig.registry["eagle3_moe"] is Eagle3MoESpeculatorConfig
     print("[1/4] registration OK")
 
 
@@ -69,7 +69,7 @@ def test_routing():
 
 def test_num_experts_1_parity():
     moe = Eagle3MoEDraftModel(_moe_config(num_experts=1))
-    base = SpeculatorModel.get_class("eagle3")(
+    base = SpeculatorModel.registry["eagle3"](
         Eagle3SpeculatorConfig(
             transformer_layer_config=_tiny_llama_config(), draft_vocab_size=128
         )

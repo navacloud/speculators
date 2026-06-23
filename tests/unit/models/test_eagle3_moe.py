@@ -37,8 +37,8 @@ def _moe_config(num_experts: int = 1, depth_to_expert=None, share_attn: bool = T
 
 
 def test_registered_by_name():
-    assert SpeculatorModel.get_class("eagle3_moe") is Eagle3MoEDraftModel
-    assert SpeculatorModelConfig.get_class("eagle3_moe") is Eagle3MoESpeculatorConfig
+    assert SpeculatorModel.registry["eagle3_moe"] is Eagle3MoEDraftModel
+    assert SpeculatorModelConfig.registry["eagle3_moe"] is Eagle3MoESpeculatorConfig
 
 
 @pytest.mark.parametrize("num_experts", [1, 2, 3])
@@ -78,7 +78,7 @@ def test_set_active_expert_selects_mlp():
 
 def test_num_experts_1_parity_with_eagle3():
     moe = Eagle3MoEDraftModel(_moe_config(num_experts=1))
-    base = SpeculatorModel.get_class("eagle3")(
+    base = SpeculatorModel.registry["eagle3"](
         Eagle3SpeculatorConfig(
             transformer_layer_config=_tiny_llama_config(),
             draft_vocab_size=128,
