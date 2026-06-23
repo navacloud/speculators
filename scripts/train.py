@@ -198,11 +198,23 @@ def create_transformer_layer_config(  # noqa: C901
 
     # New rope parameters definition introduced in transformers 5.0
     if version.parse(transformers.__version__) >= version.parse("5.0.0"):
-        if hasattr(verifier_config, "rope_parameters"):
-            config.rope_parameters = deepcopy(verifier_config.rope_parameters)
+        if hasattr(verifier_config, "rope_parameters") and verifier_config.rope_parameters:
+            rope_params = deepcopy(verifier_config.rope_parameters)
+            # Older/verifier configs may name the field 'type'; keep it as 'rope_type'.
+            if "rope_type" not in rope_params and "type" in rope_params:
+                rope_params["rope_type"] = rope_params["type"]
             _MROPE_KEYS = ("mrope_section", "mrope_interleaved", "type")  # noqa: N806
             for key in _MROPE_KEYS:
-                config.rope_parameters.pop(key, None)
+                rope_params.pop(key, None)
+            # transformers>=5 RotaryEmbedding requires 'rope_type' (e.g. Gemma verifier
+            # configs can lack it after the mrope-key pop above).
+            rope_params.setdefault("rope_type", "default")
+            # 'default' rope also needs rope_theta; Gemma keeps it as a top-level attr.
+            if "rope_theta" not in rope_params:
+                rope_params["rope_theta"] = (
+                    getattr(verifier_config, "rope_theta", None) or 10000.0
+                )
+            config.rope_parameters = rope_params
     else:
         if hasattr(verifier_config, "rope_scaling"):
             config.rope_scaling = deepcopy(verifier_config.rope_scaling)
