@@ -67,12 +67,12 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
     )
 
     def __init__(self, config: Eagle3MoESpeculatorConfig):
-        super().__init__(config)
         if not config.expert_share_attention:
             raise NotImplementedError(
                 "Only variant A (share attention, specialize MLP) is implemented; "
                 "set expert_share_attention=True."
             )
+        super().__init__(config)
         self.num_experts = config.num_experts
         self._depth_to_expert = config.depth_to_expert
 

@@ -505,7 +505,36 @@ def parse_args():
         "--speculator-type",
         type=str,
         default="eagle3",
-        help="Type of speculator model to train (eagle3, dflash, peagle, mtp)",
+        help="Type of speculator model to train (eagle3, eagle3_moe, dflash, peagle, mtp)",
+    )
+    # --- eagle3_moe (depth-routed MoE) specific args ---
+    parser.add_argument(
+        "--num-experts",
+        type=int,
+        default=1,
+        help=(
+            "eagle3_moe: number of expert MLPs per decoder layer. "
+            "1 = vanilla EAGLE-3 (default)."
+        ),
+    )
+    parser.add_argument(
+        "--depth-to-expert",
+        type=int,
+        nargs="*",
+        default=None,
+        help=(
+            "eagle3_moe: explicit TTT-step -> expert-index map (e.g. '0 1 2'). "
+            "Default: min(depth, num_experts-1)."
+        ),
+    )
+    parser.add_argument(
+        "--expert-share-attention",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "eagle3_moe: share attention/norms across depths and specialize the MLP "
+            "only (variant A; currently the only supported mode)."
+        ),
     )
     parser.add_argument(
         "--from-pretrained",
