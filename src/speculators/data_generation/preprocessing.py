@@ -42,8 +42,10 @@ def _visualize_sample(preprocessed: HFDataset, processor: ProcessorLike, idx: in
     """Visualize a single sample with color-coded trainable regions."""
     # Get preprocessed sample
     prep_sample = preprocessed[idx]
-    input_ids = prep_sample["input_ids"].tolist()
-    loss_mask = prep_sample["loss_mask"].tolist()
+    _ii = prep_sample["input_ids"]
+    _lm = prep_sample["loss_mask"]
+    input_ids = _ii.tolist() if hasattr(_ii, "tolist") else list(_ii)
+    loss_mask = _lm.tolist() if hasattr(_lm, "tolist") else list(_lm)
 
     log.info(f"SAMPLE #{idx}")
     log.info("HIGHLIGHTED TEXT (BLUE = trainable, GREY = masked)")
@@ -790,7 +792,9 @@ def load_and_preprocess_dataset(
         processed_datasets.append(preprocessed_dataset)
 
     combined_dataset = concatenate_datasets(processed_datasets)
-    combined_dataset.shuffle(seed=seed)
+    # NOTE: shuffle returns a new dataset; must reassign (else select() below would
+    # take the first N in dataset order and drop later datasets, e.g. gsm8k).
+    combined_dataset = combined_dataset.shuffle(seed=seed)
     if max_samples is not None and len(combined_dataset) > max_samples:
         combined_dataset = combined_dataset.select(range(max_samples))
 
