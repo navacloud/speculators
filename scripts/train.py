@@ -214,6 +214,19 @@ def create_transformer_layer_config(  # noqa: C901
                 rope_params["rope_theta"] = (
                     getattr(verifier_config, "rope_theta", None) or 10000.0
                 )
+            # The llama draft uses a single flat rope: transformers ignores per-layer-type
+            # sub-dicts (e.g. Gemma's full_attention/sliding_attention) for a llama model
+            # and builds rope from the top-level scalars. Drop those nested dicts so the
+            # saved config matches the trained rope AND stays hashable in vLLM's rope cache
+            # (vLLM get_rope tuple-keys the params; a dict value raises 'unhashable type').
+            dropped = [k for k, v in rope_params.items() if isinstance(v, dict)]
+            if dropped:
+                warnings.warn(
+                    f"Dropping non-scalar rope_parameters keys {dropped} from the "
+                    "llama draft config (ignored by transformers, unhashable in vLLM).",
+                    stacklevel=2,
+                )
+            rope_params = {k: v for k, v in rope_params.items() if not isinstance(v, dict)}
             config.rope_parameters = rope_params
     else:
         if hasattr(verifier_config, "rope_scaling"):
