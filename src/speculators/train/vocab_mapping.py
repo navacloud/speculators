@@ -35,6 +35,12 @@ def save_token_frequency_distribution(
     for item in tqdm(dataset, desc="Counting token frequencies"):
         input_ids = item["input_ids"]
         loss_mask = item["loss_mask"]
+        # Items may be python lists (e.g. after concatenating multiple datasets,
+        # which drops the torch format) — coerce to tensors before masking.
+        if not torch.is_tensor(input_ids):
+            input_ids = torch.as_tensor(input_ids)
+        if not torch.is_tensor(loss_mask):
+            loss_mask = torch.as_tensor(loss_mask)
         # Only count tokens where loss_mask is 1 (assistant tokens)
         masked_token_ids = input_ids[loss_mask.to(torch.bool)]
         unique_ids, counts = masked_token_ids.unique(return_counts=True)
