@@ -146,7 +146,8 @@ def build_client_item(dataset_item: dict) -> ClientItem:
     Text-only EAGLE-3 models (e.g. Llama) use a plain tokenizer, so
     ``messages`` is never created and this guard is a no-op.
     """
-    out_dict: dict = {"input_ids": dataset_item["input_ids"].tolist()}
+    _ii = dataset_item["input_ids"]
+    out_dict: dict = {"input_ids": _ii.tolist() if hasattr(_ii, "tolist") else list(_ii)}
 
     if "messages" in dataset_item and _has_multimodal_content(dataset_item["messages"]):
         out_dict["messages"] = dataset_item["messages"]
@@ -251,6 +252,15 @@ class ArrowDataset(BaseDataset):
             hidden_states_dtype: The dtype of the hidden states.
         """
         self.data = load_from_disk(datapath)
+        # Arrow rows are plain python lists by default (notably after concatenating
+        # multiple datasets, which drops any torch format). Downstream code does
+        # tensor ops (.shape/.tolist/torch.equal) on these columns, so format them
+        # as torch tensors here; other columns (e.g. seq_len) stay native.
+        _cols = [c for c in ("input_ids", "loss_mask") if c in self.data.column_names]
+        if _cols:
+            self.data = self.data.with_format(
+                "torch", columns=_cols, output_all_columns=True
+            )
         self.start_file_idx = 0
         if split_ratio == 1.0:
             pass
