@@ -495,8 +495,13 @@ def main(args: argparse.Namespace):
     )
     trainer = Trainer(draft_model, trainer_config, train_loader, val_loader)
 
-    # Run training
-    trainer.run_training()
+    # Run training (or validation-only on a loaded checkpoint, for inference-parity checks)
+    if getattr(args, "validate_only", False):
+        metrics = trainer.val_epoch(0)
+        root_logger = __import__("logging").getLogger()
+        print(f"[VALIDATE-ONLY] checkpoint={args.from_pretrained} metrics={metrics}", flush=True)
+    else:
+        trainer.run_training()
 
     # Cleanup
     del trainer, draft_model
@@ -560,6 +565,12 @@ def parse_args():
             "eagle3_moe: share attention/norms across depths and specialize the MLP "
             "only (variant A; currently the only supported mode)."
         ),
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Load --from-pretrained and run a single validation pass (no training), "
+        "for checking that a checkpoint's training metrics reproduce.",
     )
     parser.add_argument(
         "--from-pretrained",
