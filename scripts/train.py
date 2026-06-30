@@ -390,6 +390,7 @@ def main(args: argparse.Namespace):
     # Setup dataloaders
     preprocess_fns = {
         "eagle3": shift_batch,
+        "eagle3_moe": shift_batch,
         "peagle": shift_batch,
         "mtp": shift_batch_mtp,
     }
