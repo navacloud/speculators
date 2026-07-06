@@ -381,6 +381,27 @@ def main(args: argparse.Namespace):
             **vars(args),
         )
 
+    # ---- staged/curriculum expert training (flag-gated; joint path unchanged) ----
+    # When --curriculum-stage >= 0, freeze everything except the target depth's
+    # expert so a single sequential pass trains one expert at a time. Cross-depth
+    # token feedback is a detached argmax, so freezing alone confines gradients to
+    # the trainable expert (no loss masking needed). Stage 0 also trains the shared
+    # backbone (fc/attn/norm/lm_head); later stages train ONLY expert `stage`.
+    _stage = getattr(args, "curriculum_stage", -1)
+    if _stage is not None and _stage >= 0:
+        n_tr = n_fr = 0
+        for name, p in draft_model.named_parameters():
+            is_expert = ".experts." in name
+            if _stage == 0:
+                keep = (not is_expert) or (".experts.0." in name)
+            else:
+                keep = f".experts.{_stage}." in name
+            keep = bool(p.requires_grad and keep)  # preserve pre-frozen params (embed)
+            p.requires_grad_(keep)
+            n_tr += int(keep); n_fr += int(not keep)
+        print(f"[curriculum] stage={_stage}: {n_tr} trainable / {n_fr} frozen param tensors",
+              flush=True)
+
     # Get target layer IDs from the model (resolved at model level)
     num_target_layers = len(draft_model.target_layer_ids)
 
@@ -467,6 +488,12 @@ def main(args: argparse.Namespace):
 
     # Get trainer kwargs from model class
     train_call_kwargs, val_call_kwargs = model_class.get_trainer_kwargs(**vars(args))
+    # Staged/curriculum training: mask the loss to the target depth in the forward
+    # (freezing confines gradients to expert `stage`; masking prevents deeper depths'
+    # losses from backpropagating into it via the carried hidden_states).
+    if getattr(args, "curriculum_stage", -1) >= 0:
+        train_call_kwargs["loss_only_depth"] = args.curriculum_stage
+        val_call_kwargs["loss_only_depth"] = args.curriculum_stage
 
     trainer_config = TrainerConfig(
         num_epochs=args.epochs,
@@ -664,6 +691,16 @@ def parse_args():
         ),
     )
     parser.add_argument("--save-path", type=str, default="./output/checkpoints")
+    parser.add_argument(
+        "--curriculum-stage",
+        type=int,
+        default=-1,
+        help=(
+            "Staged eagle3_moe expert training. -1 (default) = disabled (joint "
+            "training, unchanged). 0 = train backbone + expert 0; i>0 = freeze all "
+            "but expert i (seed with --from-pretrained of the previous stage)."
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--no-resume-from-checkpoint", action="store_true")

@@ -29,7 +29,7 @@ from speculators.models.eagle3.attention import (
 from speculators.models.eagle3.core import Eagle3DraftModel
 from speculators.models.eagle3.metrics import compute_metrics
 from speculators.models.metrics import kl_div_loss, resolve_loss_fn
-from speculators.models.utils import resolve_target_layer_ids
+from speculators.models.utils import conditional_torch_compile, resolve_target_layer_ids
 from speculators.proposals.greedy import GreedyTokenProposalConfig
 
 from .config import Eagle3MoESpeculatorConfig
@@ -92,6 +92,7 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
         for layer in self.layers:
             layer.mlp.set_active_expert(expert_id)
 
+    @conditional_torch_compile
     def forward(
         self,
         hidden_states: torch.Tensor,  # [1, total_seq_len, 3 * hidden_size]
@@ -104,6 +105,7 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
         ttt_step_loss_decay: float = 1.0,
         use_off_policy_tokens: bool = False,
         loss_fn=kl_div_loss,
+        loss_only_depth: int | None = None,
         **kwargs,
     ):
         # Mirrors Eagle3DraftModel.forward, adding per-TTT-step expert routing.
@@ -189,7 +191,12 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
                     ttt_step_loss_decay,
                     loss_fn=loss_fn,
                 )
-                loss += s_loss
+                # Staged/curriculum training: accumulate loss ONLY from the target
+                # depth. Because hidden_states carry differentiably across TTT steps,
+                # a deeper depth's loss would otherwise backprop into (and corrupt)
+                # the trained expert. None => joint (all depths), unchanged behavior.
+                if loss_only_depth is None or ttt_step == loss_only_depth:
+                    loss += s_loss
                 metrics.update(s_metrics)
 
             input_ids = torch.argmax(logits, dim=-1)
