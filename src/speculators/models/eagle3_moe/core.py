@@ -106,6 +106,7 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
         use_off_policy_tokens: bool = False,
         loss_fn=kl_div_loss,
         loss_only_depth: int | None = None,
+        loss_upto_depth: int | None = None,
         **kwargs,
     ):
         # Mirrors Eagle3DraftModel.forward, adding per-TTT-step expert routing.
@@ -191,11 +192,18 @@ class Eagle3MoEDraftModel(Eagle3DraftModel):
                     ttt_step_loss_decay,
                     loss_fn=loss_fn,
                 )
-                # Staged/curriculum training: accumulate loss ONLY from the target
-                # depth. Because hidden_states carry differentiably across TTT steps,
-                # a deeper depth's loss would otherwise backprop into (and corrupt)
-                # the trained expert. None => joint (all depths), unchanged behavior.
-                if loss_only_depth is None or ttt_step == loss_only_depth:
+                # Curriculum loss masking. None/None => joint (all depths, unchanged).
+                # loss_only_depth=i => staged (depth i only). loss_upto_depth=i =>
+                # cumulative (depths 0..i). Deeper depths are excluded so their
+                # (frozen/untrained) experts can't corrupt the trained ones via the
+                # differentiable carried hidden_states.
+                if loss_only_depth is not None:
+                    _include = ttt_step == loss_only_depth
+                elif loss_upto_depth is not None:
+                    _include = ttt_step <= loss_upto_depth
+                else:
+                    _include = True
+                if _include:
                     loss += s_loss
                 metrics.update(s_metrics)
 

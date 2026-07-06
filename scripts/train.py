@@ -389,18 +389,27 @@ def main(args: argparse.Namespace):
     # backbone (fc/attn/norm/lm_head); later stages train ONLY expert `stage`.
     _stage = getattr(args, "curriculum_stage", -1)
     if _stage is not None and _stage >= 0:
+        import re as _re
+        _cumul = getattr(args, "curriculum_cumulative", False)
         n_tr = n_fr = 0
         for name, p in draft_model.named_parameters():
-            is_expert = ".experts." in name
-            if _stage == 0:
-                keep = (not is_expert) or (".experts.0." in name)
+            _m = _re.search(r"\.experts\.(\d+)\.", name)
+            _eidx = int(_m.group(1)) if _m else None  # None => shared backbone param
+            if _cumul:
+                # cumulative: backbone always trainable; experts 0..stage trainable;
+                # deeper experts frozen. Backbone keeps learning multi-depth signal.
+                keep = (_eidx is None) or (_eidx <= _stage)
+            elif _stage == 0:
+                # staged stage 0: backbone + expert 0
+                keep = (_eidx is None) or (_eidx == 0)
             else:
-                keep = f".experts.{_stage}." in name
+                # staged stage i>0: ONLY expert i (backbone frozen)
+                keep = (_eidx is not None and _eidx == _stage)
             keep = bool(p.requires_grad and keep)  # preserve pre-frozen params (embed)
             p.requires_grad_(keep)
             n_tr += int(keep); n_fr += int(not keep)
-        print(f"[curriculum] stage={_stage}: {n_tr} trainable / {n_fr} frozen param tensors",
-              flush=True)
+        print(f"[curriculum] stage={_stage} cumulative={_cumul}: "
+              f"{n_tr} trainable / {n_fr} frozen param tensors", flush=True)
 
     # Get target layer IDs from the model (resolved at model level)
     num_target_layers = len(draft_model.target_layer_ids)
@@ -492,8 +501,12 @@ def main(args: argparse.Namespace):
     # (freezing confines gradients to expert `stage`; masking prevents deeper depths'
     # losses from backpropagating into it via the carried hidden_states).
     if getattr(args, "curriculum_stage", -1) >= 0:
-        train_call_kwargs["loss_only_depth"] = args.curriculum_stage
-        val_call_kwargs["loss_only_depth"] = args.curriculum_stage
+        if getattr(args, "curriculum_cumulative", False):
+            train_call_kwargs["loss_upto_depth"] = args.curriculum_stage
+            val_call_kwargs["loss_upto_depth"] = args.curriculum_stage
+        else:
+            train_call_kwargs["loss_only_depth"] = args.curriculum_stage
+            val_call_kwargs["loss_only_depth"] = args.curriculum_stage
 
     trainer_config = TrainerConfig(
         num_epochs=args.epochs,
@@ -699,6 +712,15 @@ def parse_args():
             "Staged eagle3_moe expert training. -1 (default) = disabled (joint "
             "training, unchanged). 0 = train backbone + expert 0; i>0 = freeze all "
             "but expert i (seed with --from-pretrained of the previous stage)."
+        ),
+    )
+    parser.add_argument(
+        "--curriculum-cumulative",
+        action="store_true",
+        help=(
+            "Cumulative curriculum variant: at stage i train {backbone + experts 0..i} "
+            "with loss on depths 0..i (backbone stays trainable / multi-depth; earlier "
+            "experts keep learning). Default (unset) = staged (freeze all but expert i)."
         ),
     )
     parser.add_argument("--epochs", type=int, default=20)
