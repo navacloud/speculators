@@ -526,7 +526,7 @@ def build_backend_args(gen_kwargs: str, max_tokens: int) -> str:
             raise ValueError(msg) from e
     else:
         body = {}
-    body["max_tokens"] = max_tokens
+    body["max_tokens"] = min(max_tokens, int(os.environ.get("EVAL_MAX_TOKENS", "256")))
     return json.dumps({"extras": {"body": body}})
 
 
